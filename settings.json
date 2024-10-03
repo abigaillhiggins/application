@@ -1,0 +1,14 @@
+{
+    "Response Length": {
+        "setting": "Response Length",
+        "value": 30.0
+    },
+    "Device Mode": {
+        "setting": "Device Mode",
+        "value": "Read any important text in this image that can describe important features of this image "
+    },
+    "Playback Speed": {
+        "setting": "Playback Speed",
+        "value": 2.5
+    }
+}
