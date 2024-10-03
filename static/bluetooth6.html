@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bluetooth Device Scanner and Connector</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron&display=swap');
+
+        body {
+            background-color: #b7ebec;
+            font-family: 'Orbitron', sans-serif;
+        }
+        h1 {
+            font-size: 4rem;
+        }
+        .btn {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 20px;
+        }
+        #device-list {
+            margin-top: 20px;
+        }
+        #error-details {
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.8em;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .device-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .device-address {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+    <div class="container p-5">
+        <h1>Connect to your Bluetooth Device</h1>
+        <div id="status" class="alert alert-info">Not scanning</div>
+        <div id="error-details" class="alert alert-danger" style="display: none;"></div>
+        <div class="row mt-4">
+            <div class="col">
+                <button class="btn btn-primary btn-lg" data-bs-toggle="collapse" data-bs-target="#bluetoothMenu" aria-expanded="false" aria-controls="bluetoothMenu" id="bluetoothMenuButton">
+                    Connect to Bluetooth Device
+                </button>
+                <div class="collapse" id="bluetoothMenu">
+                    <button class="btn btn-secondary btn-lg mt-3" id="scan-button">Scan for Devices</button>
+                    <ul id="device-list" class="list-group mt-3"></ul>
+                </div>
+            </div>
+            <div class="col">
+                <a href="/" class="btn btn-success btn-lg" id="homeButton">Home Page</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io('http://' + document.domain + ':' + location.port);
+        const scanButton = document.getElementById('scan-button');
+        const statusDiv = document.getElementById('status');
+        const errorDetailsDiv = document.getElementById('error-details');
+        const deviceList = document.getElementById('device-list');
+        const bluetoothMenuButton = document.getElementById('bluetoothMenuButton');
+        const homeButton = document.getElementById('homeButton');
+
+        function speakText(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function cancelTTS() {
+            window.speechSynthesis.cancel();
+        }
+
+        function showError(message) {
+            console.error(message);
+            statusDiv.textContent = 'Error occurred';
+            errorDetailsDiv.textContent = message;
+            errorDetailsDiv.style.display = 'block';
+            if (ttsEnabled) {
+                speakText('An error occurred. Check the error details for more information.');
+            }
+        }
+
+        const ttsEnabled = localStorage.getItem('ttsEnabled') === 'true';
+
+        if (ttsEnabled) {
+            speakText("You are on the Bluetooth Device Scanner and Connector page.");
+        }
+
+        bluetoothMenuButton.addEventListener('click', function() {
+            if (ttsEnabled) {
+                speakText('Bluetooth connection menu opened.');
+            }
+        });
+
+        scanButton.addEventListener('click', function() {
+            statusDiv.textContent = 'Scanning for devices...';
+            deviceList.innerHTML = '';
+            errorDetailsDiv.style.display = 'none';
+            
+            if (ttsEnabled) {
+                speakText('Scanning for devices...');
+            }
+
+            socket.emit('scan_devices');
+        });
+
+        function displayDevices(devices) {
+            statusDiv.textContent = 'Scan complete. Found ' + devices.length + ' devices.';
+            if (ttsEnabled) {
+                speakText('Scan complete. Found ' + devices.length + ' devices.');
+            }
+
+            deviceList.innerHTML = '';
+
+            if (devices.length > 0) {
+                devices.forEach(device => {
+                    const listItem = document.createElement('li');
+                    listItem.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center');
+                    const deviceInfo = document.createElement('div');
+                    deviceInfo.innerHTML = `
+                        <span class="device-name">${device.name}</span><br>
+                        <span class="device-address">${device.address}</span>
+                    `;
+                    const connectButton = document.createElement('button');
+                    connectButton.textContent = 'Connect';
+                    connectButton.classList.add('btn', 'btn-sm', 'btn-primary');
+                    connectButton.addEventListener('click', () => connectToDevice(device));
+                    listItem.appendChild(deviceInfo);
+                    listItem.appendChild(connectButton);
+                    deviceList.appendChild(listItem);
+                });
+            } else {
+                const noDeviceItem = document.createElement('li');
+                noDeviceItem.classList.add('list-group-item');
+                noDeviceItem.textContent = 'No devices found.';
+                deviceList.appendChild(noDeviceItem);
+            }
+        }
+
+        function connectToDevice(device) {
+            statusDiv.textContent = `Connecting to ${device.name}...`;
+            errorDetailsDiv.style.display = 'none';
+            if (ttsEnabled) {
+                speakText(`Connecting to ${device.name}...`);
+            }
+
+            socket.emit('connect_device', { address: device.address });
+        }
+
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+
+        socket.on('connect_error', function(error) {
+            showError('Connection error: ' + error.message);
+        });
+
+        socket.on('scan_results', function(data) {
+            if (data.success) {
+                displayDevices(data.devices);
+            } else {
+                showError('Scan failed: ' + data.error);
+            }
+        });
+
+        socket.on('connect_result', function(data) {
+            if (data.success) {
+                statusDiv.textContent = data.message;
+                if (ttsEnabled) {
+                    speakText(data.message);
+                }
+            } else {
+                showError(`Error connecting to device: ${data.error}`);
+            }
+        });
+
+        homeButton.addEventListener('click', function() {
+            if (ttsEnabled) {
+                speakText('Navigating to Home Page.');
+            }
+        });
+
+        window.addEventListener('beforeunload', cancelTTS);
+        homeButton.addEventListener('click', cancelTTS);
+    </script>
+</body>
+</html>
